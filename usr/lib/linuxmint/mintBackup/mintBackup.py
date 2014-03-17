@@ -24,6 +24,7 @@ try:
     from user import home
     import tempfile
     import apt.progress.gtk2
+    import logging
 except Exception, detail:
     print "You do not have the required dependencies"
 
@@ -33,6 +34,10 @@ gettext.install("mintbackup", "/usr/share/linuxmint/locale")
 # i18n for menu item
 menuName = _("Backup Tool")
 menuComment = _("Make a backup of your home directory")
+
+# set debugging
+logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
+
 
 class TarFileMonitor():
     ''' Bit of a hack but I can figure out what tarfile is doing now.. (progress wise) '''
@@ -887,11 +892,24 @@ class MintBackup:
                 gtk.gdk.threads_leave()
         self.operating = False
 
-    ''' Returns true if the file/directory is on the exclude list '''
+    ''' Returns true if the file/directory is on the exclude list or not a regular file/link or directory'''
     def is_excluded(self, filename):
+        logging.debug("enter is_exlueded with " + filename)
+        filemode = os.stat(filename).st_mode
+        logging.debug("filemode:  " + str(filemode))
+        filemodeok = stat.S_ISREG(filemode) or stat.S_ISDIR(filemode) or stat.S_ISLNK(filemode)
+        if(not filemodeok):
+            warningtext= 'Warning: File %s was ignored because of a wrong file mode!' % filename
+            self.errors.append([warningtext, str(oct(filemode))])
+            logging.warning(warningtext)
+            logging.debug("leaving is_exlueded with True")
+            return True
+
         for row in self.wTree.get_widget("treeview_excludes").get_model():
             if(filename.startswith(row[2])):
+                logging.debug("leaving is_exlueded with True")
                 return True
+        logging.debug("leaving is_exlueded with False")
         return False
 
     ''' Update the backup progress bar '''
@@ -1546,10 +1564,10 @@ class MintBackup:
             source = open(self.package_source, "r")
             re = source.readlines()
             error = False
-            for line in re:                
+            for line in re:
                 line = line.rstrip("\r\n")
                 if (line != ""):
-                    if(not line.endswith("\tinstall")):                        
+                    if(not line.endswith("\tinstall")):
                         error = True
                         break
             source.close()
